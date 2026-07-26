@@ -7,9 +7,9 @@ Strategy: [`market-analysis.md`](./market-analysis.md) · Build plan: [`docs/imp
 
 ## Status
 
-Milestone 1, step 4 of 7: effects and presets. Drop in artwork and a track, pick one of five
-calm presets, and the artwork moves to the music in a looping 9:16 preview. The loop picker
-and MP4 export land next.
+Milestone 1, step 5 of 7: the loop picker. Drop in artwork and a track, drag a 3–8 second
+window over the waveform to choose what loops, pick one of five calm presets, and watch it
+in a 9:16 preview. MP4 export and the on-spec validator land next.
 
 ## Getting started
 

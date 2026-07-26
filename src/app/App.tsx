@@ -10,7 +10,8 @@ import { CoverImageError, loadCoverImage, validateCoverImage } from '../engine/i
 import { AudioDecodeError, decodeAudioFile } from '../engine/analysis/decode';
 import { analyze } from '../engine/analysis/analyzer';
 import { sampleFeatures } from '../engine/analysis/features';
-import { defaultSegment, timelineFrameFor } from '../engine/loop';
+import { WAVEFORM_BUCKETS, computePeaks } from '../engine/analysis/waveform';
+import { clampSegment, defaultSegment, timelineFrameFor } from '../engine/loop';
 import { LoopPlayer } from '../engine/playback/loopPlayer';
 import { BUILTIN_PRESETS, DEFAULT_PRESET_ID, findPreset } from '../engine/presets/builtins';
 import { resolveAmounts, resolveCycles } from '../engine/presets/routing';
@@ -18,12 +19,14 @@ import { CANVAS_EXPORT_DEFAULT, CANVAS_SPEC } from '../engine/export/spec';
 import { DropZone } from './components/DropZone';
 import { PresetPicker } from './components/PresetPicker';
 import { PreviewStage } from './components/PreviewStage';
+import { SegmentPicker } from './components/SegmentPicker';
+import { formatSeconds } from './format';
 
 interface LoadedAudio {
   readonly name: string;
   readonly buffer: AudioBuffer;
   readonly timeline: FeatureTimeline;
-  readonly segment: LoopSegment;
+  readonly peaks: Float32Array;
 }
 
 /**
@@ -35,6 +38,7 @@ export function App() {
   const [cover, setCover] = useState<CoverImage | null>(null);
   const [warnings, setWarnings] = useState<readonly CoverImageWarning[]>([]);
   const [audio, setAudio] = useState<LoadedAudio | null>(null);
+  const [segment, setSegment] = useState<LoopSegment | null>(null);
   const [presetId, setPresetId] = useState(DEFAULT_PRESET_ID);
   const [analysing, setAnalysing] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -71,12 +75,14 @@ export function App() {
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       const timeline = analyze(buffer, { fps: CANVAS_EXPORT_DEFAULT.fps });
-      const segment = defaultSegment(buffer.duration);
+      const peaks = computePeaks(buffer, WAVEFORM_BUCKETS);
+      const initialSegment = defaultSegment(buffer.duration);
 
       playerRef.current?.dispose();
-      playerRef.current = new LoopPlayer(buffer, segment);
+      playerRef.current = new LoopPlayer(buffer, initialSegment);
       setPlaying(false);
-      setAudio({ name: file.name, buffer, timeline, segment });
+      setSegment(initialSegment);
+      setAudio({ name: file.name, buffer, timeline, peaks });
     } catch (cause) {
       setError(
         cause instanceof AudioDecodeError ? cause.message : 'That audio could not be analysed.',
@@ -100,20 +106,33 @@ export function App() {
     }
   }, []);
 
+  const handleSegmentChange = useCallback(
+    (next: LoopSegment) => {
+      if (!audio) {
+        return;
+      }
+      const settled = clampSegment(next, audio.buffer.duration);
+      setSegment(settled);
+      // Only reached on release, not mid-drag, so playback restarts once.
+      playerRef.current?.setSegment(settled);
+    },
+    [audio],
+  );
+
   // Cycle counts are fixed per preset, so resolve them once rather than per frame.
   const cycles = useMemo(() => resolveCycles(preset), [preset]);
 
   const frameFor = useMemo(() => {
-    if (!audio) {
+    if (!audio || !segment) {
       return null;
     }
-    const { timeline, segment } = audio;
+    const { timeline } = audio;
     return (): RenderFrame => {
       const phase = playerRef.current?.phase() ?? 0;
       const sample = sampleFeatures(timeline, timelineFrameFor(segment, phase, timeline.fps));
       return { phase, amounts: resolveAmounts(preset, sample), cycles };
     };
-  }, [audio, preset, cycles]);
+  }, [audio, segment, preset, cycles]);
 
   const { width, height, fps } = CANVAS_EXPORT_DEFAULT;
 
@@ -165,15 +184,21 @@ export function App() {
 
           {analysing ? <p className="notice notice-ok">Analysing audio…</p> : null}
 
-          {audio ? (
+          {audio && segment ? (
             <>
               <p className="notice notice-ok">
-                {audio.name} — {audio.buffer.duration.toFixed(1)}s analysed, looping{' '}
-                {audio.segment.durationSec.toFixed(1)}s from the start.
+                {audio.name} — {formatSeconds(audio.buffer.duration)} analysed, looping{' '}
+                {segment.durationSec.toFixed(1)}s from {formatSeconds(segment.startSec)}.
               </p>
               <button type="button" className="transport" onClick={() => void togglePlayback()}>
                 {playing ? 'Pause' : 'Play loop'}
               </button>
+              <SegmentPicker
+                peaks={audio.peaks}
+                trackDurationSec={audio.buffer.duration}
+                segment={segment}
+                onChange={handleSegmentChange}
+              />
             </>
           ) : null}
 
@@ -206,7 +231,7 @@ export function App() {
 
       <p className="status">
         {audio
-          ? 'Preview only — the loop picker and MP4 export land next.'
+          ? 'Preview only — MP4 export and the on-spec validator land next.'
           : 'Add artwork and a track to see the motion.'}
       </p>
     </main>
