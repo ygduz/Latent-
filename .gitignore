@@ -2,5 +2,12 @@ node_modules/
 dist/
 coverage/
 *.local
+*.local.*
 .DS_Store
 .vite/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+.playwright/

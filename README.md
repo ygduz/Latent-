@@ -7,15 +7,16 @@ Strategy: [`market-analysis.md`](./market-analysis.md) · Build plan: [`docs/imp
 
 ## Status
 
-Milestone 1, step 1 of 7: scaffold. The build pipeline, architectural boundary and domain
-contracts are in place; intake, analysis, render and export land next.
+Milestone 1, step 2 of 7: cover art intake and static render. Drop in artwork and it draws
+into the 9:16 Canvas frame — contained at full width over a dimmed backdrop of itself.
+Audio analysis, motion and export land next.
 
 ## Getting started
 
 ```bash
 npm install
 npm run dev      # http://localhost:5173
-npm run check    # typecheck + lint + tests — run before every commit
+npm run check    # typecheck + lint + unit + browser tests — run before every commit
 ```
 
 | Script | Does |
@@ -24,8 +25,13 @@ npm run check    # typecheck + lint + tests — run before every commit
 | `build` | Typecheck, then production build to `dist/` |
 | `typecheck` | `tsc --noEmit` |
 | `lint` | ESLint, including the engine boundary rule |
-| `test` / `test:watch` | Vitest |
-| `check` | All three gates in sequence |
+| `test` / `test:watch` | Vitest — pure engine logic |
+| `e2e` | Playwright — real WebGL rendering in Chromium |
+| `check` | All gates in sequence |
+
+Rendering correctness is verified in a real browser, not mocked: `e2e/render.spec.ts` uploads
+a four-quadrant test image and probes canvas pixels, so a flipped or mis-cropped texture fails
+loudly instead of looking plausible.
 
 ## Architecture: one rule
 
@@ -37,7 +43,12 @@ src/
             Plain TypeScript. Uses browser APIs (WebGL2, Web Audio, WebCodecs)
             but knows nothing about React, app state, or the DOM shell.
   app/      the UI: React components and state. Calls into the engine.
+tests/      Vitest — pure logic, no browser needed.
+e2e/        Playwright — the parts only a real GPU can verify.
 ```
+
+React components own gestures and lifecycle, never pixels: `PreviewStage` creates and disposes
+a `CoverRenderer` and hands it artwork, and that is the whole of its involvement in drawing.
 
 The engine stays framework-free because it is meant to be embeddable later (the white-label
 play in the strategy doc). This is **enforced by ESLint**, not by convention — importing React

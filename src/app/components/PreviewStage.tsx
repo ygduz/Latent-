@@ -1,0 +1,96 @@
+import { useEffect, useRef, useState } from 'react';
+import type { CoverImage } from '../../engine/types';
+import { CoverRenderer, WebGLUnavailableError } from '../../engine/render/coverRenderer';
+import { CANVAS_EXPORT_DEFAULT } from '../../engine/export/spec';
+
+interface PreviewStageProps {
+  readonly cover: CoverImage | null;
+}
+
+/** Cap the backing buffer at the export size — more pixels than that are wasted. */
+const MAX_BUFFER_WIDTH = CANVAS_EXPORT_DEFAULT.width;
+
+/**
+ * The 9:16 stage. Owns the canvas element and the renderer's lifecycle, and
+ * nothing else: all drawing lives in the engine.
+ */
+export function PreviewStage({ cover }: PreviewStageProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rendererRef = useRef<CoverRenderer | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Read by the creation effect so a renderer that mounts with artwork already
+  // chosen still gets a texture. Without this, artwork picked before the stage
+  // exists would silently never upload.
+  const coverRef = useRef(cover);
+  coverRef.current = cover;
+
+  // Create the renderer once per mounted canvas, and dispose it on unmount.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    let renderer: CoverRenderer;
+    try {
+      renderer = CoverRenderer.create(canvas);
+    } catch (cause) {
+      setError(
+        cause instanceof WebGLUnavailableError
+          ? 'This browser does not support WebGL2, which Latent needs to render.'
+          : 'The renderer could not start.',
+      );
+      return;
+    }
+
+    rendererRef.current = renderer;
+    setError(null);
+
+    if (coverRef.current) {
+      renderer.setCover(coverRef.current);
+    }
+
+    // Track the element's CSS size and keep the drawing buffer in step.
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) {
+        return;
+      }
+      const { width } = entry.contentRect;
+      if (width <= 0) {
+        return;
+      }
+      const scale = Math.min(window.devicePixelRatio || 1, MAX_BUFFER_WIDTH / width);
+      const bufferWidth = Math.round(width * scale);
+      const aspect = CANVAS_EXPORT_DEFAULT.width / CANVAS_EXPORT_DEFAULT.height;
+      renderer.resize(bufferWidth, Math.round(bufferWidth / aspect));
+      renderer.render();
+    });
+    observer.observe(canvas);
+
+    return () => {
+      observer.disconnect();
+      rendererRef.current = null;
+      renderer.dispose();
+    };
+  }, []);
+
+  // Upload artwork whenever it changes.
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (!renderer || !cover) {
+      return;
+    }
+    renderer.setCover(cover);
+    renderer.render();
+  }, [cover]);
+
+  return (
+    <div className="stage">
+      <canvas ref={canvasRef} className="stage-canvas" data-testid="stage-canvas" />
+      {error ? <p className="stage-error">{error}</p> : null}
+      {!error && !cover ? <p className="stage-empty">9:16 preview</p> : null}
+    </div>
+  );
+}

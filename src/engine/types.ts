@@ -20,6 +20,33 @@ export type Seconds = number;
 /** A value clamped to 0..1. Every audio feature and safety limit uses this. */
 export type Normalized = number;
 
+// --- Cover art -------------------------------------------------------------
+
+/** The artist's cover art, decoded and ready to upload as a GL texture. */
+export interface CoverImage {
+  readonly bitmap: ImageBitmap;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Something worth telling the artist about their artwork. Never fatal — the
+ * art always renders; these only warn about quality the export can't recover.
+ */
+export interface CoverImageWarning {
+  readonly code: 'low-resolution' | 'not-square';
+  readonly message: string;
+}
+
+/** How a source image is fitted into the frame. See `render/stage.ts`. */
+export type FitMode = 'contain' | 'cover';
+
+/** Maps frame space to texture space: `textureUv = (frameUv - offset) / scale`. */
+export interface FitTransform {
+  readonly scale: readonly [number, number];
+  readonly offset: readonly [number, number];
+}
+
 // --- Analysis --------------------------------------------------------------
 
 /**

@@ -1,9 +1,13 @@
 :root {
   --bg: #0b0b0d;
+  --panel: #121215;
   --fg: #ecebe8;
   --muted: #8a8783;
   --line: #232326;
   --accent: #c9a227;
+  --warn: #d9a04a;
+  --error: #e0685f;
+  --ok: #7fa87f;
 
   color-scheme: dark;
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -20,12 +24,12 @@ body {
   background: var(--bg);
   color: var(--fg);
   display: grid;
-  place-items: center;
-  padding: 2rem 1.25rem;
+  place-items: start center;
+  padding: 3rem 1.25rem;
 }
 
 .shell {
-  width: min(46rem, 100%);
+  width: min(60rem, 100%);
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
@@ -45,6 +49,128 @@ h1 {
   font-size: 1.0625rem;
   line-height: 1.6;
 }
+
+/* --- Workspace ---------------------------------------------------------- */
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (max-width: 46rem) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- Stage -------------------------------------------------------------- */
+
+.stage {
+  position: relative;
+  aspect-ratio: 9 / 16;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: #000;
+}
+
+.stage-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.stage-empty,
+.stage-error {
+  position: absolute;
+  inset: auto 1rem 1rem;
+  margin: 0;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.stage-error {
+  inset: 1rem;
+  display: grid;
+  place-content: center;
+  color: var(--error);
+  line-height: 1.5;
+}
+
+/* --- Panel -------------------------------------------------------------- */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dropzone {
+  border: 1px dashed var(--line);
+  border-radius: 0.75rem;
+  padding: 1.75rem 1.5rem;
+  background: var(--panel);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.dropzone.is-dragging {
+  border-color: var(--accent);
+  background: #17171b;
+}
+
+.dropzone-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  cursor: pointer;
+}
+
+.dropzone-label strong {
+  font-weight: 500;
+}
+
+.dropzone-label span {
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.dropzone input[type='file'] {
+  margin-top: 1rem;
+  width: 100%;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+/* --- Notices ------------------------------------------------------------ */
+
+.notice {
+  margin: 0;
+  padding: 0.75rem 0.875rem;
+  border-left: 2px solid var(--line);
+  border-radius: 0.25rem;
+  background: var(--panel);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.notice-error {
+  border-left-color: var(--error);
+}
+
+.notice-warn {
+  border-left-color: var(--warn);
+}
+
+.notice-ok {
+  border-left-color: var(--ok);
+  color: var(--muted);
+}
+
+/* --- Export target ------------------------------------------------------ */
 
 .target {
   border: 1px solid var(--line);

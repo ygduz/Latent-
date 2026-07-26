@@ -4,7 +4,17 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'coverage'] },
+  {
+    ignores: [
+      'dist',
+      'node_modules',
+      'coverage',
+      'test-results',
+      'playwright-report',
+      // Scratch files kept out of git (see .gitignore).
+      '**/*.local.*',
+    ],
+  },
 
   js.configs.recommended,
   ...tseslint.configs.recommended,

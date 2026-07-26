@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run typecheck && npm run lint && npm run test"
+    "e2e": "playwright test",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run e2e"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -19,6 +20,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
+    "@playwright/test": "^1.62.0",
+    "@types/node": "^26.1.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.1.0",
