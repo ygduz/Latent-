@@ -7,9 +7,9 @@ Strategy: [`market-analysis.md`](./market-analysis.md) · Build plan: [`docs/imp
 
 ## Status
 
-Milestone 1, step 2 of 7: cover art intake and static render. Drop in artwork and it draws
-into the 9:16 Canvas frame — contained at full width over a dimmed backdrop of itself.
-Audio analysis, motion and export land next.
+Milestone 1, step 3 of 7: audio analysis. Cover art renders into the 9:16 Canvas frame, and
+audio decodes to a deterministic per-frame feature timeline with the motion-safety limits
+enforced. No audio UI yet — effects, the loop picker and export land next.
 
 ## Getting started
 
@@ -64,13 +64,24 @@ render     LoopedTimeline + Preset        -> pixels
 export     frames                         -> MP4 + ValidationReport
 ```
 
-Two invariants the code exists to protect:
+Three invariants the code exists to protect:
 
 - **Seamless by construction.** Autonomous motion is a function of loop *phase*, which wraps
   exactly to 0 at the end of the loop, so the frame after the last is identical to frame 0.
   The seam is closed by math, not by crossfading it away. See `src/engine/loop.ts`.
-- **No strobe, structurally.** Slew limiting and amplitude caps are applied in the analysis
-  stage, before any effect sees a value — so no preset or slider combination can strobe.
+- **No strobe, structurally.** Every feature channel passes through slew limiting and an
+  amplitude ceiling in `src/engine/analysis/features.ts`, before any effect sees a value — so
+  no preset, slider or routing combination can strobe. A feature needs at least 0.5s to cross
+  its full range, which is one flash per second against WCAG 2.3.1's limit of three.
+  `tests/analyzer.test.ts` asserts this against deliberately strobe-provoking input.
+- **Deterministic.** Analysis is offline rather than realtime, and pinned to a fixed
+  48 kHz sample rate (`analysis/decode.ts`) because `decodeAudioData` resamples to its
+  context's rate and device rates vary. The same file yields the same timeline — and so the
+  same video — on every machine.
+
+Audio analysis runs on a structural `PcmSource` interface rather than on `AudioBuffer`
+directly, so the whole pipeline is testable with synthetic PCM and no browser; a real
+`AudioBuffer` satisfies it unchanged, which `e2e/analysis.spec.ts` verifies for real.
 
 Platform numbers (durations, dimensions, codecs) live only in
 [`src/engine/export/spec.ts`](./src/engine/export/spec.ts). Never inline them elsewhere.
