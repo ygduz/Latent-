@@ -7,9 +7,9 @@ Strategy: [`market-analysis.md`](./market-analysis.md) · Build plan: [`docs/imp
 
 ## Status
 
-Milestone 1, step 3 of 7: audio analysis. Cover art renders into the 9:16 Canvas frame, and
-audio decodes to a deterministic per-frame feature timeline with the motion-safety limits
-enforced. No audio UI yet — effects, the loop picker and export land next.
+Milestone 1, step 4 of 7: effects and presets. Drop in artwork and a track, pick one of five
+calm presets, and the artwork moves to the music in a looping 9:16 preview. The loop picker
+and MP4 export land next.
 
 ## Getting started
 
@@ -66,9 +66,13 @@ export     frames                         -> MP4 + ValidationReport
 
 Three invariants the code exists to protect:
 
-- **Seamless by construction.** Autonomous motion is a function of loop *phase*, which wraps
-  exactly to 0 at the end of the loop, so the frame after the last is identical to frame 0.
-  The seam is closed by math, not by crossfading it away. See `src/engine/loop.ts`.
+- **Seamless by construction, and the first frame is the cover.** Every effect is multiplied by
+  an envelope that reaches exactly zero at phase 0 and phase 1 (`envelope()` in
+  `render/shaders/cover.frag`). One property does two jobs: the first frame of a render is the
+  untouched cover art, which is what Apple Motion Art requires, and the frame after the last is
+  identical to the first, so the seam is invisible. No effect may bypass it, and cycle counts
+  are whole numbers for the same reason. `e2e/motion.spec.ts` verifies both by rendering at
+  phase 1 and comparing pixels.
 - **No strobe, structurally.** Every feature channel passes through slew limiting and an
   amplitude ceiling in `src/engine/analysis/features.ts`, before any effect sees a value — so
   no preset, slider or routing combination can strobe. A feature needs at least 0.5s to cross
@@ -82,6 +86,16 @@ Three invariants the code exists to protect:
 Audio analysis runs on a structural `PcmSource` interface rather than on `AudioBuffer`
 directly, so the whole pipeline is testable with synthetic PCM and no browser; a real
 `AudioBuffer` satisfies it unchanged, which `e2e/analysis.spec.ts` verifies for real.
+
+The renderer takes *resolved numbers*, not a preset and a timeline: analysis and routing stay
+on the CPU where they are testable, and `CoverRenderer.render()` is a pure function of the
+frame it is handed. The same call draws a preview frame and an export frame, which is what will
+make an export match what was previewed.
+
+Presets are validated JSON (`presets/schema.ts`) because they are meant to be shared, so
+anything parsed may have been hand-edited. Routes pointing at parameters this build does not
+know are ignored rather than rejected, so a preset from a newer version degrades instead of
+failing.
 
 Platform numbers (durations, dimensions, codecs) live only in
 [`src/engine/export/spec.ts`](./src/engine/export/spec.ts). Never inline them elsewhere.

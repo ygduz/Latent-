@@ -1,17 +1,20 @@
-import { useCallback, useId, useRef, useState } from 'react';
+import { useCallback, useId, useState } from 'react';
 
 interface DropZoneProps {
   readonly onFile: (file: File) => void;
+  /** An `accept` value for the file input, e.g. `image/*`. */
+  readonly accept: string;
+  readonly title: string;
+  readonly hint: string;
   readonly disabled?: boolean;
 }
 
 /**
- * Cover art intake: drag and drop, or click to pick. Handles only the gesture —
- * decoding and validation belong to the engine (`intake/coverImage.ts`).
+ * File intake: drag and drop, or click to pick. Handles only the gesture —
+ * decoding and validation belong to the engine.
  */
-export function DropZone({ onFile, disabled = false }: DropZoneProps) {
+export function DropZone({ onFile, accept, title, hint, disabled = false }: DropZoneProps) {
   const inputId = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const takeFirstFile = useCallback(
@@ -54,14 +57,13 @@ export function DropZone({ onFile, disabled = false }: DropZoneProps) {
       onDragLeave={() => setIsDragging(false)}
     >
       <label htmlFor={inputId} className="dropzone-label">
-        <strong>Drop your cover art</strong>
-        <span>or choose a file — PNG, JPEG or WebP, square and at least 1080px</span>
+        <strong>{title}</strong>
+        <span>{hint}</span>
       </label>
       <input
         id={inputId}
-        ref={inputRef}
         type="file"
-        accept="image/*"
+        accept={accept}
         disabled={disabled}
         onChange={(event) => {
           takeFirstFile(event.target.files);

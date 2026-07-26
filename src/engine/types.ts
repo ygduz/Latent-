@@ -103,8 +103,29 @@ export interface LoopedTimeline extends FeatureTimeline {
 
 export type EffectId = 'breathe' | 'drift' | 'glow' | 'grain' | 'ripple' | 'vignette';
 
-/** e.g. `'glow.intensity'` — addresses one animatable parameter of one effect. */
+export const EFFECT_IDS = [
+  'breathe',
+  'drift',
+  'glow',
+  'grain',
+  'ripple',
+  'vignette',
+] as const satisfies readonly EffectId[];
+
+/** e.g. `'glow.amount'` — addresses one animatable parameter of one effect. */
 export type EffectParamPath = `${EffectId}.${string}`;
+
+/** Resolved 0..1 strength for every effect at one frame. */
+export type EffectAmounts = Readonly<Record<EffectId, Normalized>>;
+
+/**
+ * How many times an effect's autonomous motion repeats within one loop.
+ *
+ * Integer by necessity, not by preference: motion is a function of loop phase,
+ * so a whole number of cycles is what keeps the last frame identical to the
+ * first. A fractional value would put a visible jump in the seam.
+ */
+export type EffectCycles = Readonly<Record<EffectId, number>>;
 
 /**
  * One row of the routing matrix: a feature drives a parameter.
@@ -125,12 +146,21 @@ export interface Route {
   readonly smooth: Normalized;
 }
 
+/**
+ * A named set of routes plus the cycle counts for their autonomous motion.
+ *
+ * Which effects are active is derived from `routes` rather than listed
+ * separately, so there is one source of truth and no way for the two to
+ * disagree.
+ */
 export interface Preset {
   readonly schemaVersion: 1;
   readonly id: string;
   readonly name: string;
-  readonly effects: readonly EffectId[];
+  readonly description: string;
   readonly routes: readonly Route[];
+  /** Defaults to one cycle per loop for any effect not named here. */
+  readonly cycles?: Partial<EffectCycles>;
 }
 
 // --- Motion safety ---------------------------------------------------------

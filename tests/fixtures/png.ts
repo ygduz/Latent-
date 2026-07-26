@@ -140,6 +140,30 @@ export function encodePng(width: number, height: number, pixel: PixelFn): Uint8A
 }
 
 /**
+ * A square test cover full of fine detail: a diagonal gradient crossed by
+ * concentric rings.
+ *
+ * Flat colour is useless for detecting motion — a few per cent of zoom on a
+ * solid field changes almost no pixels. Detail everywhere means any drift,
+ * zoom or ripple shows up as a pixel difference.
+ */
+export function detailCover(size: number): Uint8Array {
+  const centre = (size - 1) / 2;
+  return encodePng(size, size, (x, y) => {
+    const diagonal = (x + y) / (2 * size);
+    const radius = Math.hypot(x - centre, y - centre) / centre;
+    const rings = 0.5 + 0.5 * Math.sin(radius * 26);
+    const value = Math.round(40 + diagonal * 150 + rings * 60);
+    return [
+      Math.min(255, value),
+      Math.min(255, Math.round(value * 0.82)),
+      Math.min(255, Math.round(value * 0.6)),
+      255,
+    ];
+  });
+}
+
+/**
  * A square test cover: four distinct quadrants. Distinct quadrants make it
  * possible to assert *which* part of the artwork a given frame position shows,
  * so crop and letterbox bugs cannot hide.

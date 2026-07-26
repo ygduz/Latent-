@@ -1,4 +1,6 @@
-import type { CoverImage } from '../types';
+import type { CoverImage, EffectAmounts, EffectCycles, EffectId, Normalized } from '../types';
+import { EFFECT_IDS } from '../types';
+import { NO_MOTION } from '../presets/routing';
 import { aspectOf, fitTransform } from './stage';
 import { createProgram, uniformLocation } from './glUtils';
 import vertexSource from './shaders/cover.vert?raw';
@@ -13,6 +15,29 @@ export class WebGLUnavailableError extends Error {
 
 /** How far the backdrop is darkened relative to the artwork (0 = black). */
 const BACKDROP_DIM = 0.32;
+
+/** Cycle counts to use when none are supplied. */
+const DEFAULT_CYCLES: EffectCycles = Object.fromEntries(
+  EFFECT_IDS.map((effect) => [effect, 1]),
+) as EffectCycles;
+
+/**
+ * Everything needed to draw one frame of a loop.
+ *
+ * Rendering takes resolved values rather than a preset and a timeline: routing
+ * and analysis stay on the CPU where they are testable, and the renderer stays a
+ * pure function of the numbers it is handed. The same call that draws a preview
+ * frame draws an export frame.
+ */
+export interface RenderFrame {
+  /** Position within the loop, 0..1. */
+  readonly phase: Normalized;
+  readonly amounts: EffectAmounts;
+  readonly cycles?: EffectCycles;
+}
+
+/** Phase 0 with no motion: exactly the untouched cover art. */
+export const STATIC_FRAME: RenderFrame = { phase: 0, amounts: NO_MOTION };
 
 /**
  * Draws the cover art into the 9:16 stage: the artwork contained at full
@@ -33,6 +58,9 @@ export class CoverRenderer {
     readonly containFit: WebGLUniformLocation;
     readonly coverFit: WebGLUniformLocation;
     readonly backdropDim: WebGLUniformLocation;
+    readonly phase: WebGLUniformLocation;
+    readonly amounts: Readonly<Record<EffectId, WebGLUniformLocation>>;
+    readonly cycles: Readonly<Record<EffectId, WebGLUniformLocation>>;
   };
 
   private texture: WebGLTexture | null = null;
@@ -44,11 +72,22 @@ export class CoverRenderer {
   private constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
     this.program = createProgram(gl, vertexSource, fragmentSource);
+    const byEffect = (suffix: string) =>
+      Object.fromEntries(
+        EFFECT_IDS.map((effect) => [
+          effect,
+          uniformLocation(gl, this.program, `u_${effect}${suffix}`),
+        ]),
+      ) as Record<EffectId, WebGLUniformLocation>;
+
     this.uniforms = {
       cover: uniformLocation(gl, this.program, 'u_cover'),
       containFit: uniformLocation(gl, this.program, 'u_containFit'),
       coverFit: uniformLocation(gl, this.program, 'u_coverFit'),
       backdropDim: uniformLocation(gl, this.program, 'u_backdropDim'),
+      phase: uniformLocation(gl, this.program, 'u_phase'),
+      amounts: byEffect(''),
+      cycles: byEffect('Cycles'),
     };
   }
 
@@ -106,8 +145,14 @@ export class CoverRenderer {
     this.gl.canvas.height = h;
   }
 
-  /** Draw one frame. Clears to black when there is no artwork yet. */
-  render(): void {
+  /**
+   * Draw one frame. Clears to black when there is no artwork yet.
+   *
+   * Called with no argument it draws the static cover, which is both the
+   * no-audio preview and, by the envelope invariant in the fragment shader,
+   * exactly what phase 0 of any loop looks like.
+   */
+  render(frame: RenderFrame = STATIC_FRAME): void {
     this.assertUsable();
     const { gl } = this;
 
@@ -144,6 +189,13 @@ export class CoverRenderer {
       cover.offset[1],
     );
     gl.uniform1f(this.uniforms.backdropDim, BACKDROP_DIM);
+
+    gl.uniform1f(this.uniforms.phase, frame.phase);
+    const cycles = frame.cycles ?? DEFAULT_CYCLES;
+    for (const effect of EFFECT_IDS) {
+      gl.uniform1f(this.uniforms.amounts[effect], frame.amounts[effect]);
+      gl.uniform1f(this.uniforms.cycles[effect], cycles[effect]);
+    }
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }

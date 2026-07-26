@@ -26,6 +26,19 @@ export default tseslint.config(
       sourceType: 'module',
       globals: globals.browser,
     },
+    rules: {
+      // A leading underscore marks something deliberately unused, and omitting
+      // a key by destructuring it away is a legitimate way to drop it.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          ignoreRestSiblings: true,
+        },
+      ],
+    },
   },
 
   {
