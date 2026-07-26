@@ -4,6 +4,7 @@ import type {
   CoverImageWarning,
   FeatureTimeline,
   LoopSegment,
+  ValidationReport,
 } from '../engine/types';
 import type { RenderFrame } from '../engine/render/coverRenderer';
 import { CoverImageError, loadCoverImage, validateCoverImage } from '../engine/intake/coverImage';
@@ -16,11 +17,25 @@ import { LoopPlayer } from '../engine/playback/loopPlayer';
 import { BUILTIN_PRESETS, DEFAULT_PRESET_ID, findPreset } from '../engine/presets/builtins';
 import { resolveAmounts, resolveCycles } from '../engine/presets/routing';
 import { CANVAS_EXPORT_DEFAULT, CANVAS_SPEC } from '../engine/export/spec';
+import {
+  ExportUnsupportedError,
+  exportCanvasLoop,
+  exportFilename,
+  isExportSupported,
+} from '../engine/export/encoder';
 import { DropZone } from './components/DropZone';
 import { PresetPicker } from './components/PresetPicker';
 import { PreviewStage } from './components/PreviewStage';
 import { SegmentPicker } from './components/SegmentPicker';
+import { ValidatorReport } from './components/ValidatorReport';
 import { formatSeconds } from './format';
+
+interface FinishedExport {
+  readonly url: string;
+  readonly filename: string;
+  readonly sizeBytes: number;
+  readonly report: ValidationReport;
+}
 
 interface LoadedAudio {
   readonly name: string;
@@ -43,11 +58,24 @@ export function App() {
   const [analysing, setAnalysing] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exportProgress, setExportProgress] = useState<number | null>(null);
+  const [finished, setFinished] = useState<FinishedExport | null>(null);
 
   const playerRef = useRef<LoopPlayer | null>(null);
   const preset = findPreset(presetId) ?? BUILTIN_PRESETS[0]!;
 
   useEffect(() => () => playerRef.current?.dispose(), []);
+
+  // Blob URLs are held by the browser until revoked, and an export is ~1 MB.
+  const finishedUrl = finished?.url;
+  useEffect(
+    () => () => {
+      if (finishedUrl) {
+        URL.revokeObjectURL(finishedUrl);
+      }
+    },
+    [finishedUrl],
+  );
 
   const handleCover = useCallback(async (file: File) => {
     try {
@@ -115,9 +143,47 @@ export function App() {
       setSegment(settled);
       // Only reached on release, not mid-drag, so playback restarts once.
       playerRef.current?.setSegment(settled);
+      // A finished file no longer describes what is on screen.
+      setFinished(null);
     },
     [audio],
   );
+
+  const handleExport = useCallback(async () => {
+    if (!cover || !audio || !segment) {
+      return;
+    }
+    // Rendering every frame competes with playback for the main thread.
+    playerRef.current?.pause();
+    setPlaying(false);
+    setFinished(null);
+    setError(null);
+    setExportProgress(0);
+
+    try {
+      const result = await exportCanvasLoop({
+        cover,
+        timeline: audio.timeline,
+        preset,
+        segment,
+        onProgress: setExportProgress,
+      });
+      setFinished({
+        url: URL.createObjectURL(result.blob),
+        filename: exportFilename(audio.name, preset),
+        sizeBytes: result.blob.size,
+        report: result.report,
+      });
+    } catch (cause) {
+      setError(
+        cause instanceof ExportUnsupportedError
+          ? cause.message
+          : `The export failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+      );
+    } finally {
+      setExportProgress(null);
+    }
+  }, [audio, cover, preset, segment]);
 
   // Cycle counts are fixed per preset, so resolve them once rather than per frame.
   const cycles = useMemo(() => resolveCycles(preset), [preset]);
@@ -202,7 +268,15 @@ export function App() {
             </>
           ) : null}
 
-          <PresetPicker presets={BUILTIN_PRESETS} selectedId={presetId} onSelect={setPresetId} />
+          <PresetPicker
+            presets={BUILTIN_PRESETS}
+            selectedId={presetId}
+            onSelect={(id) => {
+              setPresetId(id);
+              // The finished file was made with the previous preset.
+              setFinished(null);
+            }}
+          />
 
           <section className="target" aria-label="Export target">
             <h2>Export target</h2>
@@ -225,13 +299,56 @@ export function App() {
                 <dd>{CANVAS_SPEC.allowsAudio ? 'Included' : 'Stripped (per Canvas spec)'}</dd>
               </div>
             </dl>
+
+            {cover && audio && segment ? (
+              <div className="export">
+                <button
+                  type="button"
+                  className="transport transport-primary"
+                  disabled={exportProgress !== null || !isExportSupported()}
+                  onClick={() => void handleExport()}
+                >
+                  {exportProgress === null
+                    ? 'Export MP4'
+                    : `Rendering ${Math.round(exportProgress * 100)}%`}
+                </button>
+
+                {exportProgress !== null ? (
+                  <progress
+                    className="export-progress"
+                    max={1}
+                    value={exportProgress}
+                    aria-label="Export progress"
+                  />
+                ) : null}
+
+                {!isExportSupported() ? (
+                  <p className="notice notice-warn">
+                    This browser cannot write an MP4 on its own. Try Chrome, Edge, or Safari 26 or
+                    newer.
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="export-hint">Add artwork and a track to export.</p>
+            )}
           </section>
+
+          {finished ? (
+            <>
+              <ValidatorReport report={finished.report} />
+              <a className="download" href={finished.url} download={finished.filename}>
+                Download {finished.filename}
+                <span>{(finished.sizeBytes / 1_000_000).toFixed(2)} MB</span>
+              </a>
+            </>
+          ) : null}
         </div>
       </div>
 
       <p className="status">
         {audio
-          ? 'Preview only — MP4 export and the on-spec validator land next.'
+          ? 'Rendered on this device. Nothing about your track leaves the browser.'
           : 'Add artwork and a track to see the motion.'}
       </p>
     </main>

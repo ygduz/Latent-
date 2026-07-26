@@ -91,7 +91,11 @@ export class CoverRenderer {
     };
   }
 
-  static create(canvas: HTMLCanvasElement): CoverRenderer {
+  /**
+   * Accepts an `OffscreenCanvas` as well as a DOM canvas, so export can render
+   * at full size without putting a 1080×1920 element on the page.
+   */
+  static create(canvas: HTMLCanvasElement | OffscreenCanvas): CoverRenderer {
     const gl = canvas.getContext('webgl2', {
       alpha: false,
       antialias: false,

@@ -7,9 +7,9 @@ Strategy: [`market-analysis.md`](./market-analysis.md) · Build plan: [`docs/imp
 
 ## Status
 
-Milestone 1, step 5 of 7: the loop picker. Drop in artwork and a track, drag a 3–8 second
-window over the waveform to choose what loops, pick one of five calm presets, and watch it
-in a 9:16 preview. MP4 export and the on-spec validator land next.
+Milestone 1, step 6 of 7: **end to end**. Drop in artwork and a track, drag a 3–8 second window
+over the waveform, pick a preset, and export a Spotify Canvas MP4 — validated against the
+platform specification before you download it. Polish is what remains.
 
 ## Getting started
 
@@ -96,6 +96,28 @@ Presets are validated JSON (`presets/schema.ts`) because they are meant to be sh
 anything parsed may have been hand-edited. Routes pointing at parameters this build does not
 know are ignored rather than rejected, so a preset from a newer version degrades instead of
 failing.
+
+## The validator
+
+`export/validator.ts` is the feature the product is actually selling: the assurance that an
+upload will not come back rejected. It is pure — measurements are gathered during the render
+and this only judges them — so every rule is unit-tested without a GPU.
+
+It checks the bytes that were produced, not the settings we asked for. `export/mp4Inspect.ts`
+walks the finished container to confirm there is exactly one video track, no audio track, and
+that the frame size recorded in the file is 9:16 at an accepted width. Alongside those it
+checks loop length, that the first frame is the untouched cover, that the loop wraps without a
+jump, and that nothing strobes.
+
+Two rules deserve their reasoning:
+
+- **Seam** is measured as a *ratio*, not an absolute: the wrap-around luminance change divided
+  by the largest change inside the loop. A lively loop should not be judged by the same
+  yardstick as a still one.
+- **Strobe** follows WCAG 2.3.1 — no more than three flashes in any one second, where a flash
+  is a pair of *opposing* luminance changes of 10% or more, so a slow fade is not counted. It
+  is a screening check on average frame luminance, not a certified PEAT analysis; Latent's own
+  output cannot flash at all, so this exists to prove that rather than to rescue a bad render.
 
 Platform numbers (durations, dimensions, codecs) live only in
 [`src/engine/export/spec.ts`](./src/engine/export/spec.ts). Never inline them elsewhere.
